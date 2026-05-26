@@ -17,7 +17,7 @@ export async function generateCarousel(
       return generateWithGemini(params, apiKey!, project);
     case 'mock':
     default:
-      return generateMock(params);
+      return generateMock(params, project);
   }
 }
 
@@ -95,118 +95,111 @@ async function generateWithGemini(
   return JSON.parse(content) as GeneratedCarousel;
 }
 
-async function generateMock(params: CarouselGenerationParams): Promise<GeneratedCarousel> {
+async function generateMock(params: CarouselGenerationParams, project?: Project): Promise<GeneratedCarousel> {
   // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  await new Promise((resolve) => setTimeout(resolve, 1500));
 
   const mockSlides: GeneratedSlide[] = [];
   const slideCount = params.slide_count;
 
-  // Generate slides based on theme and style
-  const hookHeadlines: Record<string, string[]> = {
-    educar: [
-      '90% das pessoas erram isso',
-      'O que ninguém te conta sobre',
-      'Pare de cometer esse erro',
-    ],
-    autoridade: [
-      'Depois de 500+ clientes',
-      'O método que usamos para',
-      'Por que os melhores escolhem',
-    ],
-    venda: [
-      'Sua última chance de',
-      'Antes: R$2.997 → Agora: R$497',
-      'Vagas limitadas para',
-    ],
-    engajamento: [
-      'Salva esse post AGORA',
-      'Concorda? Comenta 🔥',
-      'Tag alguém que precisa ver isso',
-    ],
-    quebra_objecao: [
-      '"Mas eu não tenho tempo"',
-      '"É muito caro para mim"',
-      'As 5 desculpas que te impedem',
-    ],
-  };
+  const brand = project?.company_name || 'Postify Studio';
+  const product = project?.product_name || 'seu produto';
+  const handle = project?.company_name ? `@${project.company_name.toLowerCase().replace(/\s/g, '')}` : '@seuprofile';
 
-  const hooks = hookHeadlines[params.objective] || hookHeadlines.educar;
-  const hookIndex = Math.floor(Math.random() * hooks.length);
-
-  // Slide 1: Hook
+  // Customize slides dynamically based on the theme & niche
+  // Slide 1: Cover (Hook)
   mockSlides.push({
     slideNumber: 1,
     role: 'hook',
-    headline: `${hooks[hookIndex]}`,
-    subtitle: `${params.theme}`,
-    body: '',
-    visualDirection: 'Texto grande centralizado, fundo com gradiente escuro, tipografia bold impactante',
-    imagePrompt: `Background abstrato para post sobre ${params.theme}`,
+    headline: `Como dominar ${params.theme || 'Conteúdo Viral'}`,
+    subtitle: `Um guia prático para o nicho de ${params.niche || 'Instagram'}`,
+    body: project?.company_name ? `Apresentado por ${project.company_name}` : 'Arraste para o lado para aprender',
+    visualDirection: 'Visual de alto impacto, título em caixa alta, tipografia display extra bold',
+    imagePrompt: '',
     cta: null,
+    canvas_data: { layout: 'cover' }
   });
 
-  // Content slides
-  const contentTopics = [
-    'O primeiro passo que poucos conhecem',
-    'A estratégia que muda o jogo',
-    'O segredo está nos detalhes',
-    'Como aplicar na prática',
-    'O resultado que você pode esperar',
-    'O erro mais comum',
-    'A mentalidade certa para',
-    'Dados que comprovam',
+  // Intermediary slides (alternating layouts)
+  const steps = [
+    {
+      title: 'O Maior Erro',
+      desc: `Ignorar a estratégia de ${params.theme} é o que impede 90% das marcas de crescerem no nicho de ${params.niche}.`
+    },
+    {
+      title: 'A Solução Simples',
+      desc: `Ao focar em valor real e resolver as dores reais do seu público, você se torna a escolha natural.`
+    },
+    {
+      title: 'Como Aplicar Agora',
+      desc: `Crie um processo estruturado, meça os feedbacks e faça melhorias constantes toda semana.`
+    },
+    {
+      title: 'Otimização com IA',
+      desc: `Utilize ferramentas modernas para economizar tempo e otimizar toda a sua produção de conteúdo.`
+    },
+    {
+      title: 'Foque em Retenção',
+      desc: 'Os primeiros 3 segundos do seu post definem se o usuário vai salvar ou ignorar seu conteúdo.'
+    }
   ];
 
   for (let i = 1; i < slideCount - 1; i++) {
-    const topicIndex = (i - 1) % contentTopics.length;
+    const stepData = steps[(i - 1) % steps.length];
     const isAuthority = i === slideCount - 2;
+    
+    // Distribute layouts
+    const layouts = ['big_number', 'split', 'quote', 'clean'];
+    const layout = layouts[(i - 1) % layouts.length];
 
     mockSlides.push({
       slideNumber: i + 1,
       role: isAuthority ? 'authority' : 'content',
-      headline: `${String(i).padStart(2, '0')}. ${contentTopics[topicIndex]}`,
-      subtitle: `Quando se trata de ${params.theme.toLowerCase()}, este ponto é crucial`,
+      headline: isAuthority ? `Nosso Método na ${brand}` : `${i}. ${stepData.title}`,
+      subtitle: isAuthority 
+        ? `Como ajudamos clientes de ${params.niche} a obter mais resultados`
+        : `Passo fundamental para o sucesso com ${params.theme}`,
       body: isAuthority
-        ? 'Resultados comprovados com +200 clientes em 12 meses'
-        : '',
-      visualDirection: `Layout com número destaque, hierarquia visual forte, estilo ${params.visual_style}`,
+        ? `Aplicamos essas exatas etapas no ${product} para impulsionar o engajamento.`
+        : stepData.desc,
+      visualDirection: `Estilo premium com tipografia elegante e layout ${layout}`,
       imagePrompt: '',
       cta: null,
+      canvas_data: { layout }
     });
   }
 
   // Last slide: CTA
   const ctaTexts: Record<string, string> = {
-    educar: 'Salve este post e compartilhe com quem precisa 📌',
-    autoridade: 'Siga para mais conteúdo como este ➡️',
-    venda: 'Link na bio → Garanta sua vaga agora 🔥',
-    engajamento: 'Comenta "EU QUERO" que te envio o material 📩',
-    quebra_objecao: 'Pronto para dar o próximo passo? Link na bio 👆',
+    educar: 'Salve este post para consultar mais tarde 📌',
+    autoridade: 'Siga nosso perfil para receber mais conteúdos ➡️',
+    venda: `Acesse o link na bio e garanta o seu ${product} agora 🔥`,
+    engajamento: 'Comente abaixo o que você achou dessa estratégia! 💬',
+    quebra_objecao: `Tem alguma dúvida sobre ${product}? Envie no Direct! 📩`,
   };
 
   mockSlides.push({
     slideNumber: slideCount,
     role: 'cta',
-    headline: 'Gostou do conteúdo?',
-    subtitle: ctaTexts[params.objective] || 'Siga para mais',
-    body: '@seuprofile',
-    visualDirection: 'CTA claro, botão visual ou seta indicativa, contraste alto',
+    headline: 'Pronto para começar?',
+    subtitle: ctaTexts[params.objective] || 'Siga para mais novidades',
+    body: handle,
+    visualDirection: 'Slide de conversão, CTA em destaque com botão visual',
     imagePrompt: '',
     cta: ctaTexts[params.objective] || 'Siga para mais',
+    canvas_data: { layout: 'cta' }
   });
 
   return {
-    title: `${params.theme} - ${params.niche}`,
+    title: `${params.theme || 'Carrossel'} - ${brand}`,
     theme: params.theme,
     slides: mockSlides,
-    caption: `🔥 ${params.theme}\n\nVocê sabia que a maioria das pessoas ignora completamente isso?\n\nNeste carrossel eu trouxe os pontos mais importantes que você PRECISA saber.\n\n📌 Salva esse post para consultar depois\n💬 Comenta qual ponto mais te surpreendeu\n📤 Compartilha com alguém que precisa ver isso\n\n#${params.niche.toLowerCase().replace(/\s/g, '')} #carrossel #conteudo #dicas`,
+    caption: `🔥 Quer dominar ${params.theme}?\n\nNeste post, mostramos as principais etapas e estratégias práticas que aplicamos na ${brand} para obter o máximo de resultados no mercado.\n\n📌 Salve para não esquecer!\n💬 Comente qual ponto você achou mais interessante.\n\n#${params.niche.toLowerCase().replace(/\s/g, '')} #carrossel #marketingdigital #${brand.toLowerCase().replace(/\s/g, '')}`,
     hashtags: [
       `#${params.niche.toLowerCase().replace(/\s/g, '')}`,
       '#carrossel',
       '#conteudodigital',
-      '#dicasinstagram',
-      '#marketing',
-    ],
+      `#${brand.toLowerCase().replace(/\s/g, '')}`
+    ]
   };
 }

@@ -123,23 +123,39 @@ function CreatePageContent() {
         caption: result.caption,
         hashtags: result.hashtags,
         metadata: {},
-        slides: result.slides.map((s, i) => ({
-          id: crypto.randomUUID(),
-          carousel_id: carouselId,
-          slide_number: s.slideNumber,
-          role: s.role,
-          headline: s.headline,
-          subtitle: s.subtitle,
-          body: s.body,
-          visual_direction: s.visualDirection,
-          image_prompt: s.imagePrompt,
-          cta: s.cta,
-          canvas_data: null,
-          background_type: 'gradient' as const,
-          background_value: getDefaultBackground(params.visual_style, i),
-          sort_order: i,
-          created_at: new Date().toISOString(),
-        })),
+        slides: result.slides.map((s, i) => {
+          let layout = 'clean';
+          if (s.canvas_data && s.canvas_data.layout) {
+            layout = s.canvas_data.layout;
+          } else {
+            if (i === 0) {
+              layout = 'cover';
+            } else if (i === result.slides.length - 1) {
+              layout = 'cta';
+            } else {
+              const layouts = ['big_number', 'split', 'quote', 'clean'];
+              layout = layouts[(i - 1) % layouts.length];
+            }
+          }
+
+          return {
+            id: crypto.randomUUID(),
+            carousel_id: carouselId,
+            slide_number: s.slideNumber,
+            role: s.role,
+            headline: s.headline,
+            subtitle: s.subtitle,
+            body: s.body,
+            visual_direction: s.visualDirection,
+            image_prompt: s.imagePrompt,
+            cta: s.cta,
+            canvas_data: { layout },
+            background_type: 'gradient' as const,
+            background_value: getDefaultBackground(params.visual_style, i),
+            sort_order: i,
+            created_at: new Date().toISOString(),
+          };
+        }),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };

@@ -76,4 +76,7 @@ export interface GeneratedSlide {
   visualDirection: string;
   imagePrompt: string;
   cta: string | null;
+  canvas_data?: {
+    layout: string;
+  };
 }
