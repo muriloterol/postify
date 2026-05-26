@@ -22,6 +22,12 @@ ESTRUTURA DE SLIDE:
 - Authority/Proof: Dados, resultados, provas
 - CTA (último slide): Chamada para ação clara
 
+REGRA DE DESIGN LAYOUT (canvas_data):
+Cada slide deve sugerir um dos seguintes layouts em "canvas_data": {"layout": "cover|big_number|split|quote|clean|cta"}.
+- Slide 1 (role: hook): usar sempre 'cover'
+- Slides intermediários (role: content|authority|proof|transition): mesclar entre 'big_number', 'split', 'quote' e 'clean' de forma dinâmica
+- Slide final (role: cta): usar sempre 'cta'
+
 CONTEXTO DO CARROSSEL:
 - Tema: ${params.theme}
 - Nicho: ${params.niche}
@@ -44,7 +50,10 @@ FORMATO DE RESPOSTA (JSON):
       "body": "texto do slide se houver (máx 25 palavras)",
       "visualDirection": "descrição visual do slide",
       "imagePrompt": "prompt para gerar imagem se necessário",
-      "cta": null
+      "cta": null,
+      "canvas_data": {
+        "layout": "cover"
+      }
     }
   ],
   "caption": "legenda para Instagram (com emojis e quebras de linha)",

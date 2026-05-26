@@ -32,7 +32,7 @@ import { cn } from '@/lib/utils';
 import { useEditorStore } from '@/stores/editor-store';
 import { Carousel, Slide } from '@/types/carousel';
 import { VISUAL_STYLES, SLIDE_DIMENSIONS } from '@/lib/constants';
-import { fetchCarouselById, saveCarousel } from '@/services/db-service';
+import { fetchCarouselById, saveCarousel, fetchBrandKits } from '@/services/db-service';
 
 export default function EditorPage() {
   const params = useParams();
@@ -62,16 +62,35 @@ export default function EditorPage() {
   const [selectedElement, setSelectedElement] = useState<'headline' | 'subtitle' | 'body' | null>(null);
   const [editingField, setEditingField] = useState<string | null>(null);
 
+  const [brandKit, setBrandKit] = useState<any>(null);
+
   // Load carousel from Supabase (with localStorage fallback)
   useEffect(() => {
     async function loadCarousel() {
       const dbCarousel = await fetchCarouselById(carouselId);
       if (dbCarousel) {
         setCarousel(dbCarousel);
+        if (dbCarousel.brand_kit_id) {
+          try {
+            const kits = await fetchBrandKits();
+            const match = kits.find(k => k.id === dbCarousel.brand_kit_id);
+            if (match) setBrandKit(match);
+          } catch (e) {
+            console.error('Error loading brand kit:', e);
+          }
+        }
       } else {
         const stored = localStorage.getItem(`carousel_${carouselId}`);
         if (stored) {
-          setCarousel(JSON.parse(stored));
+          const parsed = JSON.parse(stored);
+          setCarousel(parsed);
+          if (parsed.brand_kit_id) {
+            try {
+              const kits = await fetchBrandKits();
+              const match = kits.find(k => k.id === parsed.brand_kit_id);
+              if (match) setBrandKit(match);
+            } catch (e) {}
+          }
         } else {
           router.push('/dashboard');
         }
@@ -135,71 +154,284 @@ export default function EditorPage() {
         const style = VISUAL_STYLES.find(s => s.value === carousel.visual_style);
         const textColor = style?.colors[3] || style?.colors[2] || '#FFFFFF';
         const subtitleColor = style?.colors[2] || '#CCCCCC';
+        const primaryFont = brandKit?.primary_font || 'Inter';
 
-        // Draw slide number badge
-        ctx.fillStyle = 'rgba(255,255,255,0.1)';
-        if (slide.role !== 'hook' && slide.role !== 'cta') {
+        const layout = (slide.canvas_data?.layout as string) || 'clean';
+
+        if (layout === 'cover') {
+          // 1. COVER LAYOUT
+          // Niche Tag
+          ctx.fillStyle = 'rgba(255,255,255,0.08)';
+          ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+          ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.roundRect(80, 100, 60, 36, 12);
+          ctx.roundRect(80, 80, 200, 48, 24);
           ctx.fill();
+          ctx.stroke();
+
           ctx.fillStyle = textColor;
-          ctx.font = 'bold 16px Inter, sans-serif';
+          ctx.font = `bold 18px "${primaryFont}", sans-serif`;
           ctx.textAlign = 'center';
-          ctx.fillText(`${String(slide.slide_number).padStart(2, '0')}`, 110, 124);
-        }
+          ctx.fillText((carousel.niche || 'Instagram').toUpperCase(), 180, 110);
 
-        // Draw headline
-        ctx.fillStyle = textColor;
-        ctx.font = 'bold 56px Inter, sans-serif';
-        ctx.textAlign = 'left';
-        const headlineLines = wrapText(ctx, slide.headline, canvas.width - 160);
-        const startY = slide.role === 'hook' || slide.role === 'cta'
-          ? canvas.height / 2 - (headlineLines.length * 66) / 2
-          : 200;
-        headlineLines.forEach((line, li) => {
-          ctx.fillText(line, 80, startY + li * 66);
-        });
-
-        // Draw subtitle
-        if (slide.subtitle) {
+          // Format tag
           ctx.fillStyle = subtitleColor;
-          ctx.font = '400 28px Inter, sans-serif';
-          const subtitleY = startY + headlineLines.length * 66 + 30;
-          const subtitleLines = wrapText(ctx, slide.subtitle, canvas.width - 160);
-          subtitleLines.forEach((line, li) => {
-            ctx.fillText(line, 80, subtitleY + li * 38);
-          });
-        }
+          ctx.font = `bold 16px "${primaryFont}", sans-serif`;
+          ctx.textAlign = 'right';
+          ctx.fillText(carousel.format, canvas.width - 80, 110);
 
-        // Draw body
-        if (slide.body) {
-          ctx.fillStyle = subtitleColor;
-          ctx.font = '400 24px Inter, sans-serif';
-          const bodyY = startY + headlineLines.length * 66 + (slide.subtitle ? 100 : 40);
-          const bodyLines = wrapText(ctx, slide.body, canvas.width - 160);
-          bodyLines.forEach((line, li) => {
-            ctx.fillText(line, 80, bodyY + li * 34);
-          });
-        }
-
-        // Draw CTA
-        if (slide.cta) {
-          ctx.fillStyle = 'rgba(255,255,255,0.15)';
-          const ctaWidth = ctx.measureText(slide.cta).width + 60;
-          ctx.beginPath();
-          ctx.roundRect(
-            (canvas.width - ctaWidth) / 2,
-            canvas.height - 200,
-            ctaWidth,
-            56,
-            28
-          );
-          ctx.fill();
+          // Headline
           ctx.fillStyle = textColor;
-          ctx.font = 'bold 22px Inter, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText(slide.cta, canvas.width / 2, canvas.height - 168);
+          ctx.font = `bold 56px "${primaryFont}", sans-serif`;
           ctx.textAlign = 'left';
+          const headlineLines = wrapText(ctx, slide.headline, canvas.width - 160);
+          const startY = canvas.height / 2 - (headlineLines.length * 66) / 2;
+          headlineLines.forEach((line, li) => {
+            ctx.fillText(line, 80, startY + li * 66);
+          });
+
+          // Subtitle
+          if (slide.subtitle) {
+            ctx.fillStyle = subtitleColor;
+            ctx.font = `400 28px "${primaryFont}", sans-serif`;
+            const subtitleLines = wrapText(ctx, slide.subtitle, canvas.width - 160);
+            const subtitleY = startY + headlineLines.length * 66 + 30;
+            subtitleLines.forEach((line, li) => {
+              ctx.fillText(line, 80, subtitleY + li * 38);
+            });
+          }
+
+          // Footer Line and indicator
+          ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+          ctx.beginPath();
+          ctx.moveTo(80, canvas.height - 120);
+          ctx.lineTo(canvas.width - 80, canvas.height - 120);
+          ctx.stroke();
+
+          ctx.fillStyle = subtitleColor;
+          ctx.font = `bold 16px "${primaryFont}", sans-serif`;
+          ctx.textAlign = 'left';
+          ctx.fillText('ARRASSAR PARA O LADO ➔', 80, canvas.height - 80);
+
+        } else if (layout === 'big_number') {
+          // 2. BIG NUMBER LAYOUT
+          // Giant number
+          ctx.fillStyle = 'rgba(255,255,255,0.08)';
+          ctx.font = '900 240px sans-serif';
+          ctx.textAlign = 'right';
+          ctx.fillText(String(slide.slide_number).padStart(2, '0'), canvas.width - 80, 260);
+
+          // Role Badge
+          ctx.fillStyle = 'rgba(255,255,255,0.1)';
+          ctx.beginPath();
+          ctx.roundRect(80, 80, 120, 36, 8);
+          ctx.fill();
+          ctx.fillStyle = textColor;
+          ctx.font = `bold 14px "${primaryFont}", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText(`PASSO ${slide.slide_number}`, 140, 103);
+
+          // Content
+          ctx.textAlign = 'left';
+          const headlineLines = wrapText(ctx, slide.headline, canvas.width - 160);
+          const startY = 320;
+          
+          ctx.fillStyle = textColor;
+          ctx.font = `bold 42px "${primaryFont}", sans-serif`;
+          headlineLines.forEach((line, li) => {
+            ctx.fillText(line, 80, startY + li * 52);
+          });
+
+          const subtitleY = startY + headlineLines.length * 52 + 20;
+          if (slide.subtitle) {
+            ctx.fillStyle = subtitleColor;
+            ctx.font = `400 24px "${primaryFont}", sans-serif`;
+            const subtitleLines = wrapText(ctx, slide.subtitle, canvas.width - 160);
+            subtitleLines.forEach((line, li) => {
+              ctx.fillText(line, 80, subtitleY + li * 32);
+            });
+          }
+
+          if (slide.body) {
+            const bodyY = subtitleY + (slide.subtitle ? 100 : 40);
+            ctx.fillStyle = subtitleColor;
+            ctx.font = `400 20px "${primaryFont}", sans-serif`;
+            const bodyLines = wrapText(ctx, slide.body, canvas.width - 160);
+            bodyLines.forEach((line, li) => {
+              ctx.fillText(line, 80, bodyY + li * 28);
+            });
+          }
+
+        } else if (layout === 'split') {
+          // 3. SPLIT SCREEN LAYOUT
+          // Draw split box in top half
+          ctx.fillStyle = 'rgba(255,255,255,0.05)';
+          ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+          ctx.beginPath();
+          ctx.roundRect(80, 100, canvas.width - 160, canvas.height / 2 - 140, 24);
+          ctx.fill();
+          ctx.stroke();
+
+          // Subtitle in split box
+          ctx.fillStyle = textColor;
+          ctx.font = `italic bold 28px "${primaryFont}", sans-serif`;
+          ctx.textAlign = 'left';
+          const subtitleLines = wrapText(ctx, slide.subtitle || 'Destaque', canvas.width - 220);
+          subtitleLines.forEach((line, li) => {
+            ctx.fillText(line, 120, 160 + li * 36);
+          });
+
+          // Headline in bottom half
+          ctx.fillStyle = textColor;
+          ctx.font = `bold 40px "${primaryFont}", sans-serif`;
+          const headlineLines = wrapText(ctx, slide.headline, canvas.width - 160);
+          const startY = canvas.height / 2 + 20;
+          headlineLines.forEach((line, li) => {
+            ctx.fillText(line, 80, startY + li * 48);
+          });
+
+          if (slide.body) {
+            ctx.fillStyle = subtitleColor;
+            ctx.font = `400 20px "${primaryFont}", sans-serif`;
+            const bodyY = startY + headlineLines.length * 48 + 20;
+            const bodyLines = wrapText(ctx, slide.body, canvas.width - 160);
+            bodyLines.forEach((line, li) => {
+              ctx.fillText(line, 80, bodyY + li * 28);
+            });
+          }
+
+        } else if (layout === 'quote') {
+          // 4. QUOTE LAYOUT
+          // Quote Mark
+          ctx.fillStyle = textColor;
+          ctx.font = 'italic 120px Georgia, serif';
+          ctx.textAlign = 'left';
+          ctx.fillText('“', 80, 180);
+
+          // Content
+          ctx.textAlign = 'center';
+          ctx.font = `italic 32px "${primaryFont}", sans-serif`;
+          const headlineLines = wrapText(ctx, slide.headline, canvas.width - 200);
+          const startY = canvas.height / 2 - (headlineLines.length * 46) / 2;
+          headlineLines.forEach((line, li) => {
+            ctx.fillText(line, canvas.width / 2, startY + li * 46);
+          });
+
+          // Signature footer
+          ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+          ctx.beginPath();
+          ctx.moveTo(canvas.width / 2 - 100, canvas.height - 180);
+          ctx.lineTo(canvas.width / 2 + 100, canvas.height - 180);
+          ctx.stroke();
+
+          ctx.fillStyle = textColor;
+          ctx.font = `bold 20px "${primaryFont}", sans-serif`;
+          ctx.fillText(brandKit?.name || 'Postify Studio', canvas.width / 2, canvas.height - 140);
+          
+          ctx.fillStyle = subtitleColor;
+          ctx.font = `16px "${primaryFont}", sans-serif`;
+          const handle = brandKit?.name ? brandKit.name.toLowerCase().replace(/\s/g, '') : 'postify';
+          ctx.fillText(`@${handle}`, canvas.width / 2, canvas.height - 110);
+
+        } else if (layout === 'cta') {
+          // 5. CTA LAYOUT
+          ctx.textAlign = 'center';
+          ctx.fillStyle = subtitleColor;
+          ctx.font = `bold 16px "${primaryFont}", sans-serif`;
+          ctx.fillText('PRONTO PARA APLICAR?', canvas.width / 2, 100);
+
+          // Headline
+          ctx.fillStyle = textColor;
+          ctx.font = `bold 48px "${primaryFont}", sans-serif`;
+          const headlineLines = wrapText(ctx, slide.headline, canvas.width - 160);
+          const startY = canvas.height / 2 - 120;
+          headlineLines.forEach((line, li) => {
+            ctx.fillText(line, canvas.width / 2, startY + li * 56);
+          });
+
+          // Subtitle
+          if (slide.subtitle) {
+            ctx.fillStyle = subtitleColor;
+            ctx.font = `400 24px "${primaryFont}", sans-serif`;
+            const subtitleY = startY + headlineLines.length * 56 + 20;
+            const subtitleLines = wrapText(ctx, slide.subtitle, canvas.width - 160);
+            subtitleLines.forEach((line, li) => {
+              ctx.fillText(line, canvas.width / 2, subtitleY + li * 32);
+            });
+          }
+
+          // CTA Pill Button
+          if (slide.cta) {
+            ctx.fillStyle = 'rgba(255,255,255,0.15)';
+            const ctaWidth = ctx.measureText(slide.cta).width + 60;
+            ctx.beginPath();
+            ctx.roundRect(
+              (canvas.width - ctaWidth) / 2,
+              canvas.height - 240,
+              ctaWidth,
+              56,
+              28
+            );
+            ctx.fill();
+            ctx.fillStyle = textColor;
+            ctx.font = `bold 20px "${primaryFont}", sans-serif`;
+            ctx.fillText(slide.cta, canvas.width / 2, canvas.height - 204);
+          }
+
+          // Handle Footer
+          ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+          ctx.beginPath();
+          ctx.moveTo(canvas.width / 2 - 100, canvas.height - 120);
+          ctx.lineTo(canvas.width / 2 + 100, canvas.height - 120);
+          ctx.stroke();
+
+          ctx.fillStyle = subtitleColor;
+          ctx.font = `bold 16px "${primaryFont}", sans-serif`;
+          const handle = brandKit?.name ? brandKit.name.toLowerCase().replace(/\s/g, '') : 'seuprofile';
+          ctx.fillText(`@${handle}`, canvas.width / 2, canvas.height - 80);
+
+        } else {
+          // 6. CLEAN / MINIMALIST LAYOUT (Default)
+          // Header slide number
+          ctx.fillStyle = textColor;
+          ctx.font = `bold 20px "${primaryFont}", sans-serif`;
+          ctx.textAlign = 'left';
+          ctx.fillText(`0${slide.slide_number}`, 80, 100);
+
+          // Accent dot
+          ctx.fillStyle = 'rgba(255,255,255,0.3)';
+          ctx.beginPath();
+          ctx.arc(canvas.width - 80, 92, 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Content
+          ctx.fillStyle = textColor;
+          ctx.font = `bold 48px "${primaryFont}", sans-serif`;
+          const headlineLines = wrapText(ctx, slide.headline, canvas.width - 160);
+          const startY = canvas.height / 2 - 120;
+          headlineLines.forEach((line, li) => {
+            ctx.fillText(line, 80, startY + li * 56);
+          });
+
+          const subtitleY = startY + headlineLines.length * 56 + 20;
+          if (slide.subtitle) {
+            ctx.fillStyle = subtitleColor;
+            ctx.font = `400 24px "${primaryFont}", sans-serif`;
+            const subtitleLines = wrapText(ctx, slide.subtitle, canvas.width - 160);
+            subtitleLines.forEach((line, li) => {
+              ctx.fillText(line, 80, subtitleY + li * 32);
+            });
+          }
+
+          if (slide.body) {
+            const bodyY = subtitleY + (slide.subtitle ? 80 : 30);
+            ctx.fillStyle = subtitleColor;
+            ctx.font = `400 18px "${primaryFont}", sans-serif`;
+            const bodyLines = wrapText(ctx, slide.body, canvas.width - 160);
+            bodyLines.forEach((line, li) => {
+              ctx.fillText(line, 80, bodyY + li * 26);
+            });
+          }
         }
 
         // Convert to blob
@@ -248,6 +480,8 @@ export default function EditorPage() {
   const style = VISUAL_STYLES.find(s => s.value === carousel.visual_style);
   const textColor = style?.colors[3] || style?.colors[2] || '#FFFFFF';
   const subtitleColor = style?.colors[2] || '#CCCCCC';
+  const primaryFont = brandKit?.primary_font || 'Inter';
+  const secondaryFont = brandKit?.secondary_font || 'Inter';
 
   return (
     <div className="h-screen flex flex-col bg-[var(--background)] overflow-hidden">
@@ -466,149 +700,506 @@ export default function EditorPage() {
               >
                 {/* Slide Content - rendered as editable overlays */}
                 <div
-                  className="absolute inset-0 flex flex-col p-[8%] overflow-hidden"
-                  style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100/zoom}%`, height: `${100/zoom}%` }}
+                  className="absolute inset-0 p-[8%] overflow-hidden flex flex-col justify-between"
+                  style={{
+                    transform: `scale(${zoom})`,
+                    transformOrigin: 'top left',
+                    width: `${100/zoom}%`,
+                    height: `${100/zoom}%`,
+                    fontFamily: primaryFont,
+                    color: textColor
+                  }}
                 >
-                  {/* Slide Number Badge */}
-                  {activeSlide?.role !== 'hook' && activeSlide?.role !== 'cta' && (
-                    <div
-                      className="inline-flex self-start items-center px-3 py-1.5 rounded-lg mb-6"
-                      style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
-                    >
-                      <span className="text-sm font-bold" style={{ color: textColor }}>
-                        {String(activeSlide?.slide_number).padStart(2, '0')}
-                      </span>
-                    </div>
-                  )}
+                  {(() => {
+                    const layout = (activeSlide?.canvas_data?.layout as string) || 'clean';
 
-                  {/* Spacer for centered content on hook/cta */}
-                  {(activeSlide?.role === 'hook' || activeSlide?.role === 'cta') && <div className="flex-1" />}
+                    // 1. COVER LAYOUT
+                    if (layout === 'cover') {
+                      return (
+                        <div className="h-full flex flex-col justify-between py-6">
+                          {/* Top Tag */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs uppercase tracking-widest border border-white/20 px-3 py-1.5 rounded-full bg-white/5 font-semibold">
+                              {carousel.niche || 'Instagram'}
+                            </span>
+                            <span className="text-xs text-[var(--foreground-muted)] uppercase tracking-widest font-mono">
+                              {carousel.format}
+                            </span>
+                          </div>
 
-                  {/* Headline */}
-                  <div
-                    className={cn(
-                      'cursor-text rounded-lg transition-all',
-                      editingField === 'headline' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
-                    )}
-                    onClick={() => setEditingField('headline')}
-                  >
-                    {editingField === 'headline' ? (
-                      <textarea
-                        value={activeSlide?.headline || ''}
-                        onChange={(e) => updateSlide(activeSlideIndex, { headline: e.target.value })}
-                        onBlur={() => setEditingField(null)}
-                        autoFocus
-                        className="w-full bg-transparent border-none outline-none resize-none font-bold leading-tight"
-                        style={{
-                          color: textColor,
-                          fontSize: `${Math.max(28, 52 * zoom)}px`,
-                        }}
-                        rows={3}
-                      />
-                    ) : (
-                      <h2
-                        className="font-bold leading-tight"
-                        style={{
-                          color: textColor,
-                          fontSize: '52px',
-                        }}
-                      >
-                        {activeSlide?.headline || 'Título aqui'}
-                      </h2>
-                    )}
-                  </div>
+                          {/* Headline */}
+                          <div className="flex-1 flex flex-col justify-center my-6">
+                            <div
+                              className={cn(
+                                'cursor-text rounded-lg transition-all p-2',
+                                editingField === 'headline' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
+                              )}
+                              onClick={() => setEditingField('headline')}
+                            >
+                              {editingField === 'headline' ? (
+                                <textarea
+                                  value={activeSlide?.headline || ''}
+                                  onChange={(e) => updateSlide(activeSlideIndex, { headline: e.target.value })}
+                                  onBlur={() => setEditingField(null)}
+                                  autoFocus
+                                  className="w-full bg-transparent border-none outline-none resize-none font-bold leading-tight"
+                                  style={{ color: textColor, fontSize: '56px' }}
+                                  rows={3}
+                                />
+                              ) : (
+                                <h2 className="text-5xl md:text-6xl font-bold leading-tight tracking-tight">
+                                  {activeSlide?.headline || 'Título de Impacto'}
+                                </h2>
+                              )}
+                            </div>
 
-                  {/* Subtitle */}
-                  <div
-                    className={cn(
-                      'cursor-text rounded-lg transition-all mt-4',
-                      editingField === 'subtitle' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
-                    )}
-                    onClick={() => setEditingField('subtitle')}
-                  >
-                    {editingField === 'subtitle' ? (
-                      <textarea
-                        value={activeSlide?.subtitle || ''}
-                        onChange={(e) => updateSlide(activeSlideIndex, { subtitle: e.target.value })}
-                        onBlur={() => setEditingField(null)}
-                        autoFocus
-                        className="w-full bg-transparent border-none outline-none resize-none font-normal"
-                        style={{
-                          color: subtitleColor,
-                          fontSize: '24px',
-                        }}
-                        rows={2}
-                      />
-                    ) : (
-                      <p
-                        className="font-normal"
-                        style={{
-                          color: subtitleColor,
-                          fontSize: '24px',
-                        }}
-                      >
-                        {activeSlide?.subtitle || 'Subtítulo aqui'}
-                      </p>
-                    )}
-                  </div>
+                            {/* Subtitle */}
+                            <div
+                              className={cn(
+                                'cursor-text rounded-lg transition-all mt-4 p-1',
+                                editingField === 'subtitle' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
+                              )}
+                              onClick={() => setEditingField('subtitle')}
+                            >
+                              {editingField === 'subtitle' ? (
+                                <textarea
+                                  value={activeSlide?.subtitle || ''}
+                                  onChange={(e) => updateSlide(activeSlideIndex, { subtitle: e.target.value })}
+                                  onBlur={() => setEditingField(null)}
+                                  autoFocus
+                                  className="w-full bg-transparent border-none outline-none resize-none font-normal"
+                                  style={{ color: subtitleColor, fontSize: '24px' }}
+                                  rows={2}
+                                />
+                              ) : (
+                                <p className="text-xl md:text-2xl font-normal leading-snug" style={{ color: subtitleColor }}>
+                                  {activeSlide?.subtitle || 'Subtítulo complementar aqui'}
+                                </p>
+                              )}
+                            </div>
+                          </div>
 
-                  {/* Body */}
-                  {(activeSlide?.body || editingField === 'body') && (
-                    <div
-                      className={cn(
-                        'cursor-text rounded-lg transition-all mt-4',
-                        editingField === 'body' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
-                      )}
-                      onClick={() => setEditingField('body')}
-                    >
-                      {editingField === 'body' ? (
-                        <textarea
-                          value={activeSlide?.body || ''}
-                          onChange={(e) => updateSlide(activeSlideIndex, { body: e.target.value })}
-                          onBlur={() => setEditingField(null)}
-                          autoFocus
-                          className="w-full bg-transparent border-none outline-none resize-none"
-                          style={{
-                            color: subtitleColor,
-                            fontSize: '20px',
-                          }}
-                          rows={2}
-                        />
-                      ) : (
-                        <p style={{ color: subtitleColor, fontSize: '20px' }}>
-                          {activeSlide?.body}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                          {/* Footer Brand Indicator */}
+                          <div className="flex items-center gap-2 border-t border-white/10 pt-4">
+                            <div className="w-2.5 h-2.5 rounded-full bg-[var(--primary)] animate-pulse" />
+                            <span className="text-xs uppercase tracking-widest text-[var(--foreground-muted)] font-mono">
+                              Arrastar para o lado ➔
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
 
-                  {/* CTA Button */}
-                  {activeSlide?.cta && (
-                    <div className="mt-8 flex justify-center">
-                      <div
-                        className="px-8 py-3 rounded-full cursor-text"
-                        style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-                        onClick={() => setEditingField('cta')}
-                      >
-                        {editingField === 'cta' ? (
-                          <input
-                            value={activeSlide.cta}
-                            onChange={(e) => updateSlide(activeSlideIndex, { cta: e.target.value })}
-                            onBlur={() => setEditingField(null)}
-                            autoFocus
-                            className="bg-transparent border-none outline-none text-center font-bold"
-                            style={{ color: textColor, fontSize: '20px' }}
-                          />
-                        ) : (
-                          <span className="font-bold" style={{ color: textColor, fontSize: '20px' }}>
-                            {activeSlide.cta}
+                    // 2. BIG NUMBER LAYOUT
+                    if (layout === 'big_number') {
+                      return (
+                        <div className="h-full flex flex-col justify-between relative py-4">
+                          {/* Giant Translucent Number */}
+                          <div
+                            className="absolute right-0 top-0 text-[200px] font-black opacity-10 pointer-events-none select-none font-mono"
+                            style={{ WebkitTextStroke: '2px currentColor', color: textColor }}
+                          >
+                            {String(activeSlide?.slide_number).padStart(2, '0')}
+                          </div>
+
+                          {/* Header badge */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] uppercase tracking-wider bg-[var(--primary)]/25 text-[var(--primary-light)] px-2 py-0.5 rounded-md font-semibold">
+                              Passo {activeSlide?.slide_number}
+                            </span>
+                          </div>
+
+                          {/* Content */}
+                          <div className="flex-1 flex flex-col justify-end mb-6 z-10">
+                            {/* Headline */}
+                            <div
+                              className={cn(
+                                'cursor-text rounded-lg transition-all p-2',
+                                editingField === 'headline' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
+                              )}
+                              onClick={() => setEditingField('headline')}
+                            >
+                              {editingField === 'headline' ? (
+                                <textarea
+                                  value={activeSlide?.headline || ''}
+                                  onChange={(e) => updateSlide(activeSlideIndex, { headline: e.target.value })}
+                                  onBlur={() => setEditingField(null)}
+                                  autoFocus
+                                  className="w-full bg-transparent border-none outline-none resize-none font-bold leading-tight"
+                                  style={{ color: textColor, fontSize: '42px' }}
+                                  rows={3}
+                                />
+                              ) : (
+                                <h2 className="text-4xl font-bold leading-tight tracking-tight">
+                                  {activeSlide?.headline || 'Título do Passo'}
+                                </h2>
+                              )}
+                            </div>
+
+                            {/* Subtitle */}
+                            <div
+                              className={cn(
+                                'cursor-text rounded-lg transition-all mt-2 p-1',
+                                editingField === 'subtitle' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
+                              )}
+                              onClick={() => setEditingField('subtitle')}
+                            >
+                              {editingField === 'subtitle' ? (
+                                <textarea
+                                  value={activeSlide?.subtitle || ''}
+                                  onChange={(e) => updateSlide(activeSlideIndex, { subtitle: e.target.value })}
+                                  onBlur={() => setEditingField(null)}
+                                  autoFocus
+                                  className="w-full bg-transparent border-none outline-none resize-none font-normal"
+                                  style={{ color: subtitleColor, fontSize: '20px' }}
+                                  rows={2}
+                                />
+                              ) : (
+                                <p className="text-lg leading-snug font-normal mt-1" style={{ color: subtitleColor }}>
+                                  {activeSlide?.subtitle}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Body */}
+                            {(activeSlide?.body || editingField === 'body') && (
+                              <div
+                                className={cn(
+                                  'cursor-text rounded-lg transition-all mt-3 p-1',
+                                  editingField === 'body' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
+                                )}
+                                onClick={() => setEditingField('body')}
+                              >
+                                {editingField === 'body' ? (
+                                  <textarea
+                                    value={activeSlide?.body || ''}
+                                    onChange={(e) => updateSlide(activeSlideIndex, { body: e.target.value })}
+                                    onBlur={() => setEditingField(null)}
+                                    autoFocus
+                                    className="w-full bg-transparent border-none outline-none resize-none"
+                                    style={{ color: subtitleColor, fontSize: '16px' }}
+                                    rows={3}
+                                  />
+                                ) : (
+                                  <p className="text-sm leading-relaxed" style={{ color: subtitleColor }}>
+                                    {activeSlide?.body}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // 3. SPLIT SCREEN LAYOUT
+                    if (layout === 'split') {
+                      return (
+                        <div className="h-full grid grid-rows-2 gap-4 py-4">
+                          {/* Top Split Panel (Visual Card Block) */}
+                          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6 flex flex-col justify-between">
+                            <span className="text-[10px] uppercase tracking-widest text-[var(--foreground-muted)]">
+                              Destaque Visual
+                            </span>
+                            <div
+                              className={cn(
+                                'cursor-text rounded-lg transition-all p-1',
+                                editingField === 'subtitle' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
+                              )}
+                              onClick={() => setEditingField('subtitle')}
+                            >
+                              {editingField === 'subtitle' ? (
+                                <textarea
+                                  value={activeSlide?.subtitle || ''}
+                                  onChange={(e) => updateSlide(activeSlideIndex, { subtitle: e.target.value })}
+                                  onBlur={() => setEditingField(null)}
+                                  autoFocus
+                                  className="w-full bg-transparent border-none outline-none resize-none font-normal"
+                                  style={{ color: textColor, fontSize: '20px' }}
+                                  rows={2}
+                                />
+                              ) : (
+                                <p className="text-base font-semibold leading-snug italic" style={{ color: textColor }}>
+                                  {activeSlide?.subtitle || 'Subtítulo em destaque na split screen'}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Bottom Split (Copy block) */}
+                          <div className="flex flex-col justify-center px-2">
+                            <div
+                              className={cn(
+                                'cursor-text rounded-lg transition-all p-1',
+                                editingField === 'headline' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
+                              )}
+                              onClick={() => setEditingField('headline')}
+                            >
+                              {editingField === 'headline' ? (
+                                <textarea
+                                  value={activeSlide?.headline || ''}
+                                  onChange={(e) => updateSlide(activeSlideIndex, { headline: e.target.value })}
+                                  onBlur={() => setEditingField(null)}
+                                  autoFocus
+                                  className="w-full bg-transparent border-none outline-none resize-none font-bold leading-tight"
+                                  style={{ color: textColor, fontSize: '36px' }}
+                                  rows={2}
+                                />
+                              ) : (
+                                <h3 className="text-3xl font-bold leading-tight tracking-tight">
+                                  {activeSlide?.headline}
+                                </h3>
+                              )}
+                            </div>
+
+                            {activeSlide?.body && (
+                              <p className="text-sm mt-2 leading-relaxed" style={{ color: subtitleColor }}>
+                                {activeSlide.body}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // 4. QUOTE LAYOUT
+                    if (layout === 'quote') {
+                      return (
+                        <div className="h-full flex flex-col justify-between py-6">
+                          {/* Quote Icon */}
+                          <div className="text-7xl font-serif text-[var(--primary-light)] opacity-40 select-none leading-none">
+                            “
+                          </div>
+
+                          {/* Quote Body */}
+                          <div className="flex-1 flex items-center px-4">
+                            <div
+                              className={cn(
+                                'cursor-text rounded-lg transition-all w-full p-2',
+                                editingField === 'headline' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
+                              )}
+                              onClick={() => setEditingField('headline')}
+                            >
+                              {editingField === 'headline' ? (
+                                <textarea
+                                  value={activeSlide?.headline || ''}
+                                  onChange={(e) => updateSlide(activeSlideIndex, { headline: e.target.value })}
+                                  onBlur={() => setEditingField(null)}
+                                  autoFocus
+                                  className="w-full bg-transparent border-none outline-none resize-none font-bold text-center leading-relaxed"
+                                  style={{ color: textColor, fontSize: '32px' }}
+                                  rows={3}
+                                />
+                              ) : (
+                                <h3 className="text-2xl md:text-3xl font-medium text-center leading-relaxed italic">
+                                  {activeSlide?.headline || 'Insira uma frase ou citação marcante aqui.'}
+                                </h3>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Signature Footer */}
+                          <div className="flex flex-col items-center border-t border-white/10 pt-4 gap-1">
+                            <span className="text-sm font-bold">{brandKit?.name || 'Postify Studio'}</span>
+                            <span className="text-xs text-[var(--foreground-muted)] font-mono">@{brandKit?.name ? brandKit.name.toLowerCase().replace(/\s/g, '') : 'postify'}</span>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // 5. CTA LAYOUT (CTA Final)
+                    if (layout === 'cta') {
+                      return (
+                        <div className="h-full flex flex-col justify-between py-8">
+                          {/* Badge header */}
+                          <div className="flex justify-center">
+                            <span className="text-[10px] uppercase tracking-widest text-[var(--foreground-muted)]">
+                              PRONTO PARA APLICAR?
+                            </span>
+                          </div>
+
+                          {/* Centered CTA */}
+                          <div className="flex-1 flex flex-col justify-center items-center text-center px-6">
+                            <div
+                              className={cn(
+                                'cursor-text rounded-lg transition-all p-2 w-full',
+                                editingField === 'headline' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
+                              )}
+                              onClick={() => setEditingField('headline')}
+                            >
+                              {editingField === 'headline' ? (
+                                <textarea
+                                  value={activeSlide?.headline || ''}
+                                  onChange={(e) => updateSlide(activeSlideIndex, { headline: e.target.value })}
+                                  onBlur={() => setEditingField(null)}
+                                  autoFocus
+                                  className="w-full bg-transparent border-none outline-none resize-none font-bold text-center leading-tight"
+                                  style={{ color: textColor, fontSize: '38px' }}
+                                  rows={2}
+                                />
+                              ) : (
+                                <h2 className="text-3xl md:text-4xl font-bold leading-tight tracking-tight">
+                                  {activeSlide?.headline || 'Gostou do conteúdo?'}
+                                </h2>
+                              )}
+                            </div>
+
+                            <div
+                              className={cn(
+                                'cursor-text rounded-lg transition-all mt-3 p-1 w-full',
+                                editingField === 'subtitle' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
+                              )}
+                              onClick={() => setEditingField('subtitle')}
+                            >
+                              {editingField === 'subtitle' ? (
+                                <textarea
+                                  value={activeSlide?.subtitle || ''}
+                                  onChange={(e) => updateSlide(activeSlideIndex, { subtitle: e.target.value })}
+                                  onBlur={() => setEditingField(null)}
+                                  autoFocus
+                                  className="w-full bg-transparent border-none outline-none resize-none font-normal text-center"
+                                  style={{ color: subtitleColor, fontSize: '18px' }}
+                                  rows={2}
+                                />
+                              ) : (
+                                <p className="text-base font-normal" style={{ color: subtitleColor }}>
+                                  {activeSlide?.subtitle || 'Comente e compartilhe!'}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* CTA Action Box */}
+                            {activeSlide?.cta && (
+                              <div className="mt-8 w-full flex justify-center">
+                                <div
+                                  className="px-8 py-3.5 rounded-full cursor-text bg-gradient-to-r from-[var(--primary)] to-[var(--primary-light)] text-white shadow-lg font-bold flex items-center justify-center gap-2"
+                                  onClick={() => setEditingField('cta')}
+                                >
+                                  {editingField === 'cta' ? (
+                                    <input
+                                      value={activeSlide.cta}
+                                      onChange={(e) => updateSlide(activeSlideIndex, { cta: e.target.value })}
+                                      onBlur={() => setEditingField(null)}
+                                      autoFocus
+                                      className="bg-transparent border-none outline-none text-center font-bold text-white"
+                                      style={{ fontSize: '18px' }}
+                                    />
+                                  ) : (
+                                    <span className="text-base font-bold text-white">
+                                      {activeSlide.cta}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Footer Username */}
+                          <div className="flex justify-center border-t border-white/10 pt-4">
+                            <span className="text-xs text-[var(--foreground-muted)] uppercase tracking-widest font-mono">
+                              @{brandKit?.name ? brandKit.name.toLowerCase().replace(/\s/g, '') : 'seuprofile'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // 6. CLEAN / MINIMALIST LAYOUT (Default)
+                    return (
+                      <div className="h-full flex flex-col justify-between py-6">
+                        {/* Slide number */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold font-mono text-[var(--primary-light)]">
+                            0{activeSlide?.slide_number}
                           </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                          <div className="w-1.5 h-1.5 rounded-full bg-[var(--primary)]" />
+                        </div>
 
-                  {(activeSlide?.role === 'hook' || activeSlide?.role === 'cta') && <div className="flex-1" />}
+                        {/* Text center spacer */}
+                        <div className="flex-1 flex flex-col justify-center my-6">
+                          {/* Headline */}
+                          <div
+                            className={cn(
+                              'cursor-text rounded-lg transition-all p-2',
+                              editingField === 'headline' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
+                            )}
+                            onClick={() => setEditingField('headline')}
+                          >
+                            {editingField === 'headline' ? (
+                              <textarea
+                                value={activeSlide?.headline || ''}
+                                onChange={(e) => updateSlide(activeSlideIndex, { headline: e.target.value })}
+                                  onBlur={() => setEditingField(null)}
+                                autoFocus
+                                className="w-full bg-transparent border-none outline-none resize-none font-bold leading-tight"
+                                style={{ color: textColor, fontSize: '48px' }}
+                                rows={3}
+                              />
+                            ) : (
+                              <h2 className="text-4xl md:text-5xl font-bold leading-tight tracking-tight">
+                                {activeSlide?.headline || 'Título Principal'}
+                              </h2>
+                            )}
+                          </div>
+
+                          {/* Subtitle */}
+                          <div
+                            className={cn(
+                              'cursor-text rounded-lg transition-all mt-4 p-1',
+                              editingField === 'subtitle' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
+                            )}
+                            onClick={() => setEditingField('subtitle')}
+                          >
+                            {editingField === 'subtitle' ? (
+                              <textarea
+                                value={activeSlide?.subtitle || ''}
+                                onChange={(e) => updateSlide(activeSlideIndex, { subtitle: e.target.value })}
+                                  onBlur={() => setEditingField(null)}
+                                autoFocus
+                                className="w-full bg-transparent border-none outline-none resize-none font-normal"
+                                style={{ color: subtitleColor, fontSize: '22px' }}
+                                rows={2}
+                              />
+                            ) : (
+                              <p className="text-lg md:text-xl font-normal leading-snug mt-1" style={{ color: subtitleColor }}>
+                                {activeSlide?.subtitle}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Body */}
+                          {(activeSlide?.body || editingField === 'body') && (
+                            <div
+                              className={cn(
+                                'cursor-text rounded-lg transition-all mt-4 p-1',
+                                editingField === 'body' ? 'ring-2 ring-[var(--primary)] bg-white/5' : 'hover:ring-1 hover:ring-white/20'
+                              )}
+                              onClick={() => setEditingField('body')}
+                            >
+                              {editingField === 'body' ? (
+                                <textarea
+                                  value={activeSlide?.body || ''}
+                                  onChange={(e) => updateSlide(activeSlideIndex, { body: e.target.value })}
+                                    onBlur={() => setEditingField(null)}
+                                  autoFocus
+                                  className="w-full bg-transparent border-none outline-none resize-none"
+                                  style={{ color: subtitleColor, fontSize: '18px' }}
+                                  rows={3}
+                                />
+                              ) : (
+                                <p className="text-base mt-2 leading-relaxed" style={{ color: subtitleColor }}>
+                                  {activeSlide?.body}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Footer Spacer */}
+                        <div className="h-4" />
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -638,6 +1229,29 @@ export default function EditorPage() {
                 <option value="proof">Prova</option>
                 <option value="cta">CTA</option>
                 <option value="transition">Transição</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Slide Layout */}
+          <div className="property-group">
+            <label className="property-label block">Layout do Slide</label>
+            <div className="flex items-center gap-2 mt-2">
+              <select
+                value={(activeSlide?.canvas_data?.layout as string) || 'clean'}
+                onChange={(e) => {
+                  const layout = e.target.value;
+                  const canvas_data = { ...(activeSlide?.canvas_data || {}), layout };
+                  updateSlide(activeSlideIndex, { canvas_data });
+                }}
+                className="input-dark flex-1 px-3 py-1.5 text-xs"
+              >
+                <option value="cover">Capa / Hook</option>
+                <option value="big_number">Número Gigante</option>
+                <option value="split">Split Screen</option>
+                <option value="quote">Citação</option>
+                <option value="clean">Clean / Minimalista</option>
+                <option value="cta">CTA Final</option>
               </select>
             </div>
           </div>
