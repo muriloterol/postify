@@ -52,9 +52,10 @@ const providers: ProviderOption[] = [
 ];
 
 export default function SettingsPage() {
-  const { aiProvider, apiKey, setAiProvider, setApiKey } = useAppStore();
+  const { aiProvider, openaiApiKey, geminiApiKey, setAiProvider, setOpenaiApiKey, setGeminiApiKey } = useAppStore();
 
-  const [localApiKey, setLocalApiKey] = useState(apiKey);
+  const [localOpenaiKey, setLocalOpenaiKey] = useState(openaiApiKey);
+  const [localGeminiKey, setLocalGeminiKey] = useState(geminiApiKey);
   const [showApiKey, setShowApiKey] = useState(false);
   const [keySaved, setKeySaved] = useState(false);
   const [defaultFormat, setDefaultFormat] = useState<'1080x1350' | '1080x1080'>('1080x1350');
@@ -62,7 +63,11 @@ export default function SettingsPage() {
   const [prefsSaved, setPrefsSaved] = useState(false);
 
   function handleSaveApiKey() {
-    setApiKey(localApiKey);
+    if (aiProvider === 'openai') {
+      setOpenaiApiKey(localOpenaiKey);
+    } else if (aiProvider === 'gemini') {
+      setGeminiApiKey(localGeminiKey);
+    }
     setKeySaved(true);
     setTimeout(() => setKeySaved(false), 2000);
   }
@@ -170,8 +175,8 @@ export default function SettingsPage() {
                 <input
                   id="api-key"
                   type={showApiKey ? 'text' : 'password'}
-                  value={localApiKey}
-                  onChange={(e) => setLocalApiKey(e.target.value)}
+                  value={aiProvider === 'openai' ? localOpenaiKey : localGeminiKey}
+                  onChange={(e) => aiProvider === 'openai' ? setLocalOpenaiKey(e.target.value) : setLocalGeminiKey(e.target.value)}
                   placeholder={
                     aiProvider === 'openai'
                       ? 'sk-proj-...'
@@ -225,10 +230,10 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={handleSaveApiKey}
-                disabled={!localApiKey.trim()}
+                disabled={aiProvider === 'openai' ? !localOpenaiKey.trim() : !localGeminiKey.trim()}
                 className={cn(
                   'btn-gradient mt-1 inline-flex items-center gap-2 px-5 py-2 text-sm',
-                  !localApiKey.trim() && 'cursor-not-allowed opacity-50'
+                  (aiProvider === 'openai' ? !localOpenaiKey.trim() : !localGeminiKey.trim()) && 'cursor-not-allowed opacity-50'
                 )}
               >
                 {keySaved ? (

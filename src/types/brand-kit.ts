@@ -33,3 +33,28 @@ export interface Template {
   template_data: Record<string, unknown>;
   created_at: string;
 }
+
+export interface ProjectAsset {
+  url: string;
+  name: string;
+  size?: number;
+  type?: string;
+  created_at?: string;
+}
+
+export interface Project {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  company_name: string;
+  company_logo_url: string;
+  product_name: string;
+  product_details: string;
+  target_audience: string;
+  brand_tone: string;
+  product_photos: ProjectAsset[];
+  reference_carousels: ProjectAsset[];
+  created_at: string;
+  updated_at: string;
+}

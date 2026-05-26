@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   ArrowRight,
@@ -29,8 +29,9 @@ import {
 } from '@/types/carousel';
 import { OBJECTIVES, TONES, VISUAL_STYLES, NICHES } from '@/lib/constants';
 import { generateCarousel } from '@/services/ai-service';
-import { saveCarousel } from '@/services/db-service';
+import { saveCarousel, fetchProjectById } from '@/services/db-service';
 import { useAppStore } from '@/stores/app-store';
+import { Project } from '@/types/brand-kit';
 
 const objectiveIcons: Record<string, React.ElementType> = {
   educar: BookOpen,
@@ -48,12 +49,17 @@ const toneIcons: Record<string, React.ElementType> = {
   humanizado: Heart,
 };
 
-export default function CreatePage() {
+function CreatePageContent() {
   const router = useRouter();
-  const { aiProvider, apiKey } = useAppStore();
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get('project_id');
+
+  const { aiProvider, openaiApiKey, geminiApiKey } = useAppStore();
+  const apiKey = aiProvider === 'openai' ? openaiApiKey : geminiApiKey;
   const [step, setStep] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
 
   const [params, setParams] = useState<CarouselGenerationParams>({
     theme: '',
@@ -65,6 +71,21 @@ export default function CreatePage() {
     format: '1080x1350',
     slide_count: 7,
   });
+
+  useEffect(() => {
+    if (projectId) {
+      fetchProjectById(projectId).then((proj) => {
+        if (proj) {
+          setProject(proj);
+          setParams((prev) => ({
+            ...prev,
+            audience: proj.target_audience || prev.audience,
+            tone: (proj.brand_tone as CarouselTone) || prev.tone,
+          }));
+        }
+      });
+    }
+  }, [projectId]);
 
   const updateParam = <K extends keyof CarouselGenerationParams>(
     key: K,
@@ -81,7 +102,7 @@ export default function CreatePage() {
     setError(null);
 
     try {
-      const result = await generateCarousel(params, aiProvider, apiKey);
+      const result = await generateCarousel(params, aiProvider, apiKey, project || undefined);
 
       const carouselId = crypto.randomUUID();
       const carousel = {
@@ -89,6 +110,7 @@ export default function CreatePage() {
         user_id: '00000000-0000-0000-0000-000000000000',
         collection_id: null,
         brand_kit_id: null,
+        project_id: project?.id || null,
         title: result.title,
         theme: result.theme,
         niche: params.niche,
@@ -615,4 +637,16 @@ function getDefaultBackground(style: VisualStyle, slideIndex: number): string {
 
   const bgs = backgrounds[style] || backgrounds.high_ticket_dark;
   return bgs[slideIndex % bgs.length];
+}
+
+export default function CreatePage() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen flex items-center justify-center bg-[var(--background)]">
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)]" />
+      </div>
+    }>
+      <CreatePageContent />
+    </Suspense>
+  );
 }

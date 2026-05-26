@@ -16,6 +16,8 @@ interface AppState {
   // Settings
   aiProvider: 'mock' | 'openai' | 'gemini';
   apiKey: string;
+  openaiApiKey: string;
+  geminiApiKey: string;
 
   // Actions
   setCarousels: (carousels: Carousel[]) => void;
@@ -35,6 +37,8 @@ interface AppState {
   setLoading: (loading: boolean) => void;
   setAiProvider: (provider: 'mock' | 'openai' | 'gemini') => void;
   setApiKey: (key: string) => void;
+  setOpenaiApiKey: (key: string) => void;
+  setGeminiApiKey: (key: string) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -47,6 +51,8 @@ export const useAppStore = create<AppState>()(
       isLoading: false,
       aiProvider: 'mock',
       apiKey: '',
+      openaiApiKey: '',
+      geminiApiKey: '',
 
       setCarousels: (carousels) => set({ carousels }),
       addCarousel: (carousel) => set({ carousels: [carousel, ...get().carousels] }),
@@ -67,12 +73,16 @@ export const useAppStore = create<AppState>()(
       setLoading: (isLoading) => set({ isLoading }),
       setAiProvider: (aiProvider) => set({ aiProvider }),
       setApiKey: (apiKey) => set({ apiKey }),
+      setOpenaiApiKey: (openaiApiKey) => set({ openaiApiKey }),
+      setGeminiApiKey: (geminiApiKey) => set({ geminiApiKey }),
     }),
     {
       name: 'postify-app-settings',
       partialize: (state) => ({
         aiProvider: state.aiProvider,
         apiKey: state.apiKey,
+        openaiApiKey: state.openaiApiKey,
+        geminiApiKey: state.geminiApiKey,
         sidebarCollapsed: state.sidebarCollapsed,
       }),
     }

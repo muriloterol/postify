@@ -6,110 +6,129 @@ import { useRouter } from 'next/navigation';
 import {
   PlusCircle,
   Search,
-  LayoutGrid,
-  SlidersHorizontal,
-  FileImage,
-  Clock,
-  TrendingUp,
   FolderOpen,
   MoreVertical,
   Pencil,
-  Copy,
-  Download,
   Trash2,
   Sparkles,
   Loader2,
+  FileImage,
+  TrendingUp,
+  Clock,
+  Download,
+  FolderPlus,
+  ArrowRight,
+  BookOpen,
 } from 'lucide-react';
 import { cn, formatRelativeDate } from '@/lib/utils';
-import { Carousel, CarouselStatus } from '@/types/carousel';
-import { fetchCarousels, deleteCarousel, saveCarousel } from '@/services/db-service';
-
-const statusLabels: Record<CarouselStatus, string> = {
-  draft: 'Rascunho',
-  completed: 'Concluído',
-  exported: 'Exportado',
-};
-
-const styleColors: Record<string, string[]> = {
-  high_ticket_dark: ['#0A0A2E', '#1A1040', '#D4AF37'],
-  minimalista_medico: ['#E8F4FD', '#3B82F6', '#FFFFFF'],
-  twitter_style: ['#F7F9FA', '#0F1419', '#FFFFFF'],
-  varejo_promocional: ['#DC2626', '#FBBF24', '#FFFFFF'],
-  institucional_premium: ['#0F172A', '#1E3A5F', '#60A5FA'],
-};
+import { Carousel } from '@/types/carousel';
+import { Project } from '@/types/brand-kit';
+import { fetchProjects, saveProject, deleteProject, fetchCarousels } from '@/services/db-service';
 
 export default function DashboardPage() {
   const router = useRouter();
+  const [projects, setProjects] = useState<Project[]>([]);
   const [carousels, setCarousels] = useState<Carousel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<CarouselStatus | 'all'>('all');
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newProjName, setNewProjName] = useState('');
+  const [newProjDesc, setNewProjDesc] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
-  const loadCarousels = async () => {
+  const loadData = async () => {
     setIsLoading(true);
-    const data = await fetchCarousels();
-    setCarousels(data);
+    const [fetchedProjects, fetchedCarousels] = await Promise.all([
+      fetchProjects(),
+      fetchCarousels(),
+    ]);
+    setProjects(fetchedProjects);
+    setCarousels(fetchedCarousels);
     setIsLoading(false);
   };
 
   useEffect(() => {
-    loadCarousels();
+    loadData();
   }, []);
 
-  const handleDuplicate = async (carousel: Carousel) => {
-    const newCarouselId = crypto.randomUUID();
-    const duplicatedCarousel: Carousel = {
-      ...carousel,
-      id: newCarouselId,
-      title: `${carousel.title} (Cópia)`,
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjName.trim()) return;
+
+    setIsCreating(true);
+    const newProjectId = crypto.randomUUID();
+    const newProject: Project = {
+      id: newProjectId,
+      user_id: '00000000-0000-0000-0000-000000000000',
+      name: newProjName,
+      description: newProjDesc || null,
+      company_name: '',
+      company_logo_url: '',
+      product_name: '',
+      product_details: '',
+      target_audience: '',
+      brand_tone: 'direto',
+      product_photos: [],
+      reference_carousels: [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      slides: carousel.slides.map((slide) => ({
-        ...slide,
-        id: crypto.randomUUID(),
-        carousel_id: newCarouselId,
-        created_at: new Date().toISOString(),
-      })),
     };
-    const success = await saveCarousel(duplicatedCarousel);
+
+    const success = await saveProject(newProject);
     if (success) {
-      loadCarousels();
+      setNewProjName('');
+      setNewProjDesc('');
+      setIsModalOpen(false);
+      // Redirect to the newly created project so they can fill briefing & generate
+      router.push(`/projects/${newProjectId}`);
+    } else {
+      alert('Erro ao criar projeto.');
     }
-    setOpenMenu(null);
+    setIsCreating(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Deseja realmente excluir este carrossel?')) {
-      const success = await deleteCarousel(id);
+  const handleDeleteProject = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (confirm('Deseja realmente excluir esta pasta de projeto? Todos os carrosséis dentro dela serão removidos.')) {
+      const success = await deleteProject(id);
       if (success) {
-        setCarousels((prev) => prev.filter((c) => c.id !== id));
+        setProjects((prev) => prev.filter((p) => p.id !== id));
       }
     }
     setOpenMenu(null);
   };
 
-  const filteredCarousels = useMemo(() => {
-    return carousels.filter((c) => {
-      const matchesSearch =
+  const filteredProjects = useMemo(() => {
+    return projects.filter((p) => {
+      return (
         !searchQuery ||
-        c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.niche.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
-      return matchesSearch && matchesStatus;
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
     });
-  }, [carousels, searchQuery, statusFilter]);
+  }, [projects, searchQuery]);
+
+  // Project statistics helper
+  const projectCarouselsCount = useMemo(() => {
+    const counts: Record<string, number> = {};
+    projects.forEach(p => {
+      counts[p.id] = carousels.filter(c => c.project_id === p.id).length;
+    });
+    return counts;
+  }, [projects, carousels]);
 
   const stats = useMemo(() => {
     return {
-      total: carousels.length,
-      thisWeek: carousels.filter(
-        (c) => Date.now() - new Date(c.created_at).getTime() < 7 * 24 * 60 * 60 * 1000
-      ).length,
+      projectsTotal: projects.length,
+      carouselsTotal: carousels.length,
       completed: carousels.filter((c) => c.status === 'completed').length,
       exported: carousels.filter((c) => c.status === 'exported').length,
     };
-  }, [carousels]);
+  }, [projects, carousels]);
 
   return (
     <div className="p-8 max-w-[1400px] mx-auto">
@@ -117,28 +136,28 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-[var(--foreground)] font-[family-name:var(--font-jakarta)] tracking-tight">
-            Dashboard
+            Projetos
           </h1>
           <p className="mt-1 text-[var(--foreground-muted)]">
-            Gerencie e crie seus carrosséis com IA no Postify
+            Crie pastas de projeto para organizar briefs, produtos e gerar carrosséis com IA.
           </p>
         </div>
-        <Link
-          href="/create"
-          className="btn-gradient flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="btn-gradient flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold cursor-pointer"
         >
-          <PlusCircle className="w-4 h-4" />
-          Criar Carrossel
-        </Link>
+          <FolderPlus className="w-4 h-4" />
+          Nova Pasta
+        </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 stagger-children">
         {[
-          { label: 'Total de Carrosséis', value: stats.total, icon: FileImage, color: 'var(--primary)' },
-          { label: 'Esta Semana', value: stats.thisWeek, icon: TrendingUp, color: 'var(--success)' },
-          { label: 'Concluídos', value: stats.completed, icon: Clock, color: 'var(--info)' },
-          { label: 'Exportados', value: stats.exported, icon: Download, color: 'var(--accent)' },
+          { label: 'Pastas de Projeto', value: stats.projectsTotal, icon: FolderOpen, color: 'var(--primary)' },
+          { label: 'Total de Carrosséis', value: stats.carouselsTotal, icon: FileImage, color: 'var(--info)' },
+          { label: 'Prontos para Postar', value: stats.completed, icon: Clock, color: 'var(--success)' },
+          { label: 'Carrosséis Exportados', value: stats.exported, icon: Download, color: 'var(--accent)' },
         ].map((stat) => (
           <div key={stat.label} className="glass-card p-5">
             <div className="flex items-center justify-between">
@@ -146,7 +165,7 @@ export default function DashboardPage() {
                 <p className="text-xs font-medium text-[var(--foreground-muted)] uppercase tracking-wider">
                   {stat.label}
                 </p>
-                <p className="text-3xl font-bold mt-1" style={{ color: stat.color }}>
+                <p className="text-3xl font-bold mt-1 text-white">
                   {stat.value}
                 </p>
               </div>
@@ -161,32 +180,17 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Filters */}
+      {/* Search & Actions */}
       <div className="flex items-center gap-4 mb-6">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--foreground-muted)]" />
           <input
             type="text"
-            placeholder="Buscar carrosséis..."
+            placeholder="Buscar pastas de projetos..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="input-dark w-full pl-10 pr-4 py-2.5 text-sm"
           />
-        </div>
-
-        <div className="flex items-center gap-2">
-          {(['all', 'draft', 'completed', 'exported'] as const).map((status) => (
-            <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={cn(
-                'pill-selector text-xs',
-                statusFilter === status && 'active'
-              )}
-            >
-              {status === 'all' ? 'Todos' : statusLabels[status]}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -195,117 +199,65 @@ export default function DashboardPage() {
         <div className="flex items-center justify-center py-24">
           <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)]" />
         </div>
-      ) : filteredCarousels.length > 0 ? (
+      ) : filteredProjects.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 stagger-children">
-          {filteredCarousels.map((carousel) => {
-            const colors = styleColors[carousel.visual_style] || ['#1A1A2E', '#2D2D44', '#F5F5F5'];
+          {filteredProjects.map((project) => {
+            const count = projectCarouselsCount[project.id] || 0;
             return (
               <div
-                key={carousel.id}
-                className="glass-card group overflow-hidden"
+                key={project.id}
+                onClick={() => router.push(`/projects/${project.id}`)}
+                className="glass-card group overflow-hidden cursor-pointer hover:border-[var(--primary)]/30 hover:shadow-lg hover:shadow-black/20 transition-all p-5 flex flex-col justify-between h-48 relative border border-[var(--border)]"
               >
-                {/* Preview */}
-                <Link href={`/editor/${carousel.id}`}>
-                  <div
-                    className="h-44 relative overflow-hidden"
-                    style={{
-                      background: `linear-gradient(135deg, ${colors[0]}, ${colors[1]})`,
-                    }}
-                  >
-                    {/* Simulated slide preview */}
-                    <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
-                      <p
-                        className="text-lg font-bold leading-tight line-clamp-3"
-                        style={{ color: colors[2] || '#F5F5F5' }}
-                      >
-                        {carousel.slides[0]?.headline || carousel.title}
-                      </p>
+                {/* Folder Header */}
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-[var(--primary)]/10 text-[var(--primary-light)] flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+                      <FolderOpen className="w-6 h-6" />
                     </div>
-
-                    {/* Slide count badge */}
-                    <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-lg">
-                      <span className="text-xs font-medium text-white">
-                        {carousel.slides.length} slides
+                    <div>
+                      <h3 className="font-semibold text-base text-white group-hover:text-[var(--primary-light)] transition-colors line-clamp-1">
+                        {project.name}
+                      </h3>
+                      <span className="text-[10px] text-[var(--foreground-muted)] uppercase tracking-wider font-mono">
+                        {count} {count === 1 ? 'carrossel' : 'carrosséis'}
                       </span>
                     </div>
-
-                    {/* Hover overlay */}
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 flex items-center justify-center">
-                      <div className="opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:scale-100 scale-90">
-                        <div className="bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2 rounded-xl">
-                          <span className="text-sm font-medium text-white flex items-center gap-2">
-                            <Pencil className="w-3.5 h-3.5" />
-                            Editar
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-
-                {/* Info */}
-                <div className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-[var(--foreground)] truncate">
-                        {carousel.title}
-                      </h3>
-                      <p className="text-xs text-[var(--foreground-muted)] mt-0.5">
-                        {carousel.niche} • {formatRelativeDate(carousel.created_at)}
-                      </p>
-                    </div>
-
-                    <div className="relative">
-                      <button
-                        onClick={() => setOpenMenu(openMenu === carousel.id ? null : carousel.id)}
-                        className="p-1 rounded-lg hover:bg-white/5 transition-colors"
-                      >
-                        <MoreVertical className="w-4 h-4 text-[var(--foreground-muted)]" />
-                      </button>
-
-                      {openMenu === carousel.id && (
-                        <div className="absolute right-0 top-8 z-50 w-40 py-1 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-xl">
-                          <Link
-                            href={`/editor/${carousel.id}`}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--foreground-secondary)] hover:bg-white/5 transition-colors"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                            Editar
-                          </Link>
-                          <button
-                            onClick={() => handleDuplicate(carousel)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--foreground-secondary)] hover:bg-white/5 transition-colors"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                            Duplicar
-                          </button>
-                          <button
-                            onClick={() => handleDelete(carousel.id)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--danger)] hover:bg-[var(--danger)]/10 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            Excluir
-                          </button>
-                        </div>
-                      )}
-                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 mt-3">
-                    <span
-                      className={cn(
-                        'slide-badge text-[10px]',
-                        carousel.status === 'draft' && 'status-draft',
-                        carousel.status === 'completed' && 'status-completed',
-                        carousel.status === 'exported' && 'status-exported'
-                      )}
+                  <div className="relative" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setOpenMenu(openMenu === project.id ? null : project.id)}
+                      className="p-1 rounded-lg hover:bg-white/5 transition-colors"
                     >
-                      {statusLabels[carousel.status]}
-                    </span>
-                    <span className="text-[10px] text-[var(--foreground-muted)]">
-                      {carousel.format}
-                    </span>
+                      <MoreVertical className="w-4 h-4 text-[var(--foreground-muted)]" />
+                    </button>
+
+                    {openMenu === project.id && (
+                      <div className="absolute right-0 top-8 z-50 w-40 py-1 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-xl">
+                        <button
+                          onClick={(e) => handleDeleteProject(project.id, e)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--danger)] hover:bg-[var(--danger)]/10 transition-colors text-left"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Excluir Pasta
+                        </button>
+                      </div>
+                    )}
                   </div>
+                </div>
+
+                {/* Folder Body */}
+                <p className="text-xs text-[var(--foreground-secondary)] line-clamp-2 mt-4 leading-relaxed flex-1">
+                  {project.description || 'Nenhuma descrição adicionada.'}
+                </p>
+
+                {/* Footer link indicator */}
+                <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5 text-[10px] text-[var(--foreground-muted)]">
+                  <span>Criado {formatRelativeDate(project.created_at)}</span>
+                  <span className="flex items-center gap-1 text-[var(--primary-light)] opacity-0 group-hover:opacity-100 transition-opacity">
+                    Abrir pasta <ArrowRight className="w-3 h-3" />
+                  </span>
                 </div>
               </div>
             );
@@ -315,21 +267,71 @@ export default function DashboardPage() {
         /* Empty State */
         <div className="flex flex-col items-center justify-center py-24">
           <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[var(--primary)]/20 to-[var(--primary-light)]/10 flex items-center justify-center mb-6">
-            <Sparkles className="w-10 h-10 text-[var(--primary-light)]" />
+            <FolderOpen className="w-10 h-10 text-[var(--primary-light)]" />
           </div>
           <h3 className="text-xl font-semibold text-[var(--foreground)] mb-2">
-            Nenhum carrossel encontrado
+            Nenhuma pasta de projeto
           </h3>
-          <p className="text-sm text-[var(--foreground-muted)] mb-6 max-w-sm text-center">
-            Comece criando seu primeiro carrossel com IA. É rápido, fácil e profissional.
+          <p className="text-sm text-[var(--foreground-muted)] mb-6 max-w-sm text-center leading-relaxed">
+            Antes de criar um carrossel, você precisa criar uma pasta de projeto para acumular briefs, referências e ativos.
           </p>
-          <Link
-            href="/create"
-            className="btn-gradient flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold"
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="btn-gradient flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold cursor-pointer"
           >
-            <PlusCircle className="w-4 h-4" />
-            Criar Primeiro Carrossel
-          </Link>
+            <FolderPlus className="w-4 h-4" />
+            Criar Minha Primeira Pasta
+          </button>
+        </div>
+      )}
+
+      {/* Creation Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass-card w-full max-w-md p-6 border border-white/10 relative animate-scale-up">
+            <h2 className="text-xl font-bold text-white mb-4">Nova Pasta de Projeto</h2>
+            <form onSubmit={handleCreateProject} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[var(--foreground-secondary)]">Nome do Projeto</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Lançamento Produto X, Feed Dra. Eli"
+                  value={newProjName}
+                  onChange={(e) => setNewProjName(e.target.value)}
+                  className="input-dark w-full text-sm"
+                />
+              </div>
+              
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[var(--foreground-secondary)]">Descrição</label>
+                <textarea
+                  placeholder="Objetivos principais deste projeto..."
+                  value={newProjDesc}
+                  onChange={(e) => setNewProjDesc(e.target.value)}
+                  className="input-dark w-full text-sm min-h-[80px]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold border border-[var(--border)] text-[var(--foreground-secondary)] hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreating}
+                  className="btn-gradient px-5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 cursor-pointer"
+                >
+                  {isCreating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FolderPlus className="w-3.5 h-3.5" />}
+                  Criar e Abrir
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

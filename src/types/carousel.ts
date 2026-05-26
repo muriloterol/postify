@@ -3,6 +3,7 @@ export interface Carousel {
   user_id: string;
   collection_id: string | null;
   brand_kit_id: string | null;
+  project_id: string | null;
   title: string;
   theme: string;
   niche: string;

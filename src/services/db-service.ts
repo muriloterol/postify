@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { Carousel, Slide } from '@/types/carousel';
-import { BrandKit, Collection, Template } from '@/types/brand-kit';
+import { BrandKit, Collection, Template, Project } from '@/types/brand-kit';
 
 const supabase = createClient();
 const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000000';
@@ -242,4 +242,88 @@ export async function deleteTemplate(id: string): Promise<boolean> {
     return false;
   }
   return true;
+}
+
+// ==========================================
+// PROJECTS
+// ==========================================
+
+export async function fetchProjects(): Promise<Project[]> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching projects:', error);
+    return [];
+  }
+
+  return data as Project[];
+}
+
+export async function fetchProjectById(id: string): Promise<Project | null> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    console.error('Error fetching project by id:', error);
+    return null;
+  }
+
+  return data as Project;
+}
+
+export async function saveProject(project: Project): Promise<boolean> {
+  const projectData = { ...project, user_id: project.user_id || DEFAULT_USER_ID };
+  
+  projectData.product_photos = projectData.product_photos || [];
+  projectData.reference_carousels = projectData.reference_carousels || [];
+
+  const { error } = await supabase.from('projects').upsert(projectData);
+  if (error) {
+    console.error('Error saving project:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteProject(id: string): Promise<boolean> {
+  const { error } = await supabase.from('projects').delete().eq('id', id);
+  if (error) {
+    console.error('Error deleting project:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function fetchCarouselsByProjectId(projectId: string): Promise<Carousel[]> {
+  const { data: carouselsData, error: carouselsError } = await supabase
+    .from('carousels')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false });
+
+  if (carouselsError) {
+    console.error('Error fetching project carousels:', carouselsError);
+    return [];
+  }
+
+  const { data: slidesData, error: slidesError } = await supabase
+    .from('slides')
+    .select('*')
+    .order('sort_order', { ascending: true });
+
+  if (slidesError) {
+    console.error('Error fetching slides:', slidesError);
+    return [];
+  }
+
+  return carouselsData.map((carousel) => ({
+    ...carousel,
+    slides: slidesData.filter((s) => s.carousel_id === carousel.id),
+  })) as Carousel[];
 }

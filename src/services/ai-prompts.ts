@@ -1,6 +1,18 @@
-import { CarouselGenerationParams, GeneratedCarousel, GeneratedSlide } from '@/types/carousel';
+import { CarouselGenerationParams } from '@/types/carousel';
+import { Project } from '@/types/brand-kit';
 
-export function buildSystemPrompt(params: CarouselGenerationParams): string {
+export function buildSystemPrompt(params: CarouselGenerationParams, project?: Project): string {
+  const projectContextInfo = project ? `
+CONTEXTO DETALHADO DO PROJETO E DO PRODUTO:
+- Nome da Empresa/Marca: ${project.company_name || 'N/A'}
+- Nome do Produto/Serviço: ${project.product_name || 'N/A'}
+- Descrição do Produto/Serviço: ${project.product_details || 'N/A'}
+- Público-Alvo Detalhado: ${project.target_audience || 'N/A'}
+- Tom de voz preferido: ${project.brand_tone || 'direto'}
+${project.product_photos?.length ? `- Imagens do produto anexadas: ${project.product_photos.map(p => p.name).join(', ')}` : ''}
+${project.reference_carousels?.length ? `- Carrosséis de referência anexados para inspiração: ${project.reference_carousels.map(p => p.name).join(', ')}` : ''}
+` : '';
+
   return `Você é um copywriter especialista em carrosséis virais para Instagram. 
 Sua missão é criar conteúdo que gera PARADAS DE SCROLL, salvamentos e compartilhamentos.
 
@@ -36,6 +48,7 @@ CONTEXTO DO CARROSSEL:
 - Tom de voz: ${params.tone}
 - Estilo visual: ${params.visual_style}
 - Quantidade de slides: ${params.slide_count}
+${projectContextInfo}
 
 FORMATO DE RESPOSTA (JSON):
 {
@@ -63,7 +76,7 @@ FORMATO DE RESPOSTA (JSON):
 Gere EXATAMENTE ${params.slide_count} slides. Responda APENAS com o JSON, sem markdown ou explicações.`;
 }
 
-export function buildUserPrompt(params: CarouselGenerationParams): string {
+export function buildUserPrompt(params: CarouselGenerationParams, project?: Project): string {
   const objectiveMap: Record<string, string> = {
     educar: 'Educar o público sobre o tema',
     autoridade: 'Posicionar como autoridade/referência',
@@ -80,8 +93,13 @@ export function buildUserPrompt(params: CarouselGenerationParams): string {
     humanizado: 'Tom humanizado, próximo e empático',
   };
 
-  return `Crie um carrossel de ${params.slide_count} slides sobre "${params.theme}" para o nicho de ${params.niche}.
+  const projectUserContext = project ? `
+Considere o produto/serviço "${project.product_name || 'N/A'}" da empresa/marca "${project.company_name || 'N/A'}".
+Informações adicionais do briefing do produto: ${project.product_details || 'N/A'}
+` : '';
 
+  return `Crie um carrossel de ${params.slide_count} slides sobre "${params.theme}" para o nicho de ${params.niche}.
+${projectUserContext}
 Público: ${params.audience}
 Objetivo: ${objectiveMap[params.objective]}
 Tom: ${toneMap[params.tone]}

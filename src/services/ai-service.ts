@@ -1,4 +1,5 @@
 import { CarouselGenerationParams, GeneratedCarousel, GeneratedSlide } from '@/types/carousel';
+import { Project } from '@/types/brand-kit';
 import { buildSystemPrompt, buildUserPrompt } from './ai-prompts';
 
 export type AIProvider = 'mock' | 'openai' | 'gemini';
@@ -6,13 +7,14 @@ export type AIProvider = 'mock' | 'openai' | 'gemini';
 export async function generateCarousel(
   params: CarouselGenerationParams,
   provider: AIProvider = 'mock',
-  apiKey?: string
+  apiKey?: string,
+  project?: Project
 ): Promise<GeneratedCarousel> {
   switch (provider) {
     case 'openai':
-      return generateWithOpenAI(params, apiKey!);
+      return generateWithOpenAI(params, apiKey!, project);
     case 'gemini':
-      return generateWithGemini(params, apiKey!);
+      return generateWithGemini(params, apiKey!, project);
     case 'mock':
     default:
       return generateMock(params);
@@ -21,7 +23,8 @@ export async function generateCarousel(
 
 async function generateWithOpenAI(
   params: CarouselGenerationParams,
-  apiKey: string
+  apiKey: string,
+  project?: Project
 ): Promise<GeneratedCarousel> {
   if (!apiKey || apiKey.trim() === '') {
     throw new Error('Chave de API do OpenAI não configurada. Vá em Configurações para adicioná-la.');
@@ -35,8 +38,8 @@ async function generateWithOpenAI(
     body: JSON.stringify({
       model: 'gpt-4o',
       messages: [
-        { role: 'system', content: buildSystemPrompt(params) },
-        { role: 'user', content: buildUserPrompt(params) },
+        { role: 'system', content: buildSystemPrompt(params, project) },
+        { role: 'user', content: buildUserPrompt(params, project) },
       ],
       temperature: 0.8,
       response_format: { type: 'json_object' },
@@ -55,7 +58,8 @@ async function generateWithOpenAI(
 
 async function generateWithGemini(
   params: CarouselGenerationParams,
-  apiKey: string
+  apiKey: string,
+  project?: Project
 ): Promise<GeneratedCarousel> {
   if (!apiKey || apiKey.trim() === '') {
     throw new Error('Chave de API do Gemini não configurada. Vá em Configurações para adicioná-la.');
@@ -69,7 +73,7 @@ async function generateWithGemini(
         contents: [
           {
             parts: [
-              { text: buildSystemPrompt(params) + '\n\n' + buildUserPrompt(params) },
+              { text: buildSystemPrompt(params, project) + '\n\n' + buildUserPrompt(params, project) },
             ],
           },
         ],

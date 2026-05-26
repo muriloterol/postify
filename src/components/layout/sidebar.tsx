@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard', label: 'Projetos', icon: LayoutDashboard },
   { href: '/create', label: 'Criar Carrossel', icon: PlusCircle },
   { href: '/brand-kit', label: 'Brand Kit', icon: Palette },
   { href: '/templates', label: 'Templates', icon: LayoutTemplate },
